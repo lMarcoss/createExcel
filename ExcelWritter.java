@@ -1,20 +1,31 @@
-package mx.com;
-
+import mx.com.sura.facturacion.commons.bean.ReporteFacturacion;
+import org.apache.commons.lang.StringUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * @author Marcos Santiago Leonardo
  * Meltsan Solutions
- * Description: escribe en archivo excel
+ * Description: crea reporte de comprobantes en excel
  * Date: 2/6/19
  */
-public class ExcelWritter {
-    public static void main(String[] args) {
+public final class ExcelWritter {
+    public static final String[] columns = {
+            "Oficina", "Ramo", "Póliza", "Fecha Emisión Póliza",
+            "Tipo comprobante", "UUID", "CFDI Relacionado", "Fecha Emisión Comprobante",
+            "Forma Pago", "Método Pago", "RFC", "Razón Social",
+            "Prima Neta", "Derechos", "Recargos", "IVA",
+            "Total"
+    };
+
+    public static void createReport(String pathFile, List<ReporteFacturacion> listComprobante) throws Exception {
+
         Workbook workbook = new XSSFWorkbook();
 
         CreationHelper creationHelper = workbook.getCreationHelper();
@@ -34,9 +45,9 @@ public class ExcelWritter {
         Row headerRow = sheet.createRow(0);
 
         //create a cells
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < columns.length; i++) {
             Cell cell = headerRow.createCell(i);
-            cell.setCellValue("HOLA");
+            cell.setCellValue(columns[i]);
             cell.setCellStyle(headerCellStyle);
         }
 
@@ -47,26 +58,56 @@ public class ExcelWritter {
 
         /*Creando contenido*/
         int rowNum = 1;
-        for (int i = 0; i < 10; i++) {
+        for (ReporteFacturacion comprobante : listComprobante) {
             Row row = sheet.createRow(rowNum++);
-            for (int j = 0; j < 16; j++) {
-                row.createCell(j).setCellValue(j);
+            int colum = 0;
+
+            if (comprobante.getDsTipoComprobante().equalsIgnoreCase("INGRESO")) {
+                for (Field field : comprobante.getClass().getDeclaredFields()) {
+                    field.setAccessible(true);
+                    if (StringUtils.isBlank(String.valueOf(field.get(comprobante)))
+                            || String.valueOf(field.get(comprobante)).equalsIgnoreCase("null")) {
+                        row.createCell(colum++).setCellValue("");
+                    } else {
+                        if (field.getName().equalsIgnoreCase("cfdiRelacionado")) {
+                            row.createCell(colum++).setCellValue("");
+                        } else {
+                            row.createCell(colum++).setCellValue(String.valueOf(field.get(comprobante)));
+                        }
+                    }
+
+
+                }
+            } else if (comprobante.getDsTipoComprobante().equalsIgnoreCase("COMPLEMENTO")) {
+                createRow(comprobante, row, colum);
+            } else if (comprobante.getDsTipoComprobante().equalsIgnoreCase("EGRESO")) {
+                createRow(comprobante, row, colum);
             }
         }
 
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < columns.length; i++) {
             sheet.autoSizeColumn(i);
         }
 
         try {
-            FileOutputStream fileOutputStream = new FileOutputStream("/Users/lMarcoss/workspace-sura/projects/FacturacionServices/data.xls");
+            FileOutputStream fileOutputStream = new FileOutputStream(pathFile);
             workbook.write(fileOutputStream);
             fileOutputStream.close();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new Exception(e.getMessage());
         }
+    }
 
+    private static void createRow(ReporteFacturacion comprobante, Row row, int colum) throws IllegalAccessException {
+        for (Field field : comprobante.getClass().getDeclaredFields()) {
+            field.setAccessible(true);
+            if (StringUtils.isBlank(String.valueOf(field.get(comprobante)))
+                    || String.valueOf(field.get(comprobante)).equalsIgnoreCase("null")) {
+                row.createCell(colum++).setCellValue("");
+            } else {
+                row.createCell(colum++).setCellValue(String.valueOf(field.get(comprobante)));
+            }
+
+        }
     }
 }
